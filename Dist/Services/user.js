@@ -16,6 +16,7 @@ const user_1 = __importDefault(require("../Repository/user"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const index_config_1 = __importDefault(require("../Config/index.config"));
+const cacheService_1 = __importDefault(require("../Cache/cacheService"));
 const creatToken = (_id) => {
     return jsonwebtoken_1.default.sign({ _id: _id }, index_config_1.default.SECRET, { expiresIn: '1d' });
 };
@@ -48,11 +49,22 @@ function signUp(newUser) {
 function getUsers() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const users = yield user_1.default.getUsers();
-            if (users)
-                return { users };
+            const cached = yield cacheService_1.default.sGet("AllUsers");
+            if (!cached) {
+                console.log("here");
+                const users = yield user_1.default.getUsers();
+                if (users) {
+                    const userStrings = users.map(user => JSON.stringify(user));
+                    yield cacheService_1.default.sAdd("AllUsers", userStrings);
+                    return { users };
+                }
+                else {
+                    throw Error("No users found!");
+                }
+            }
             else {
-                throw Error("No users found!");
+                const usersParsed = cached.map((user) => JSON.parse(user));
+                return { users: usersParsed };
             }
         }
         catch (e) {
@@ -66,12 +78,19 @@ function getUserByEmail(email) {
             throw Error("Email not valid!");
         }
         try {
-            const response = yield user_1.default.getUserByEmail(email);
-            console.log(response);
-            if (response)
-                return { user: response };
+            const cached = yield cacheService_1.default.getHash(`user:${email}`);
+            if (!cached) {
+                const response = yield user_1.default.getUserByEmail(email);
+                if (response) {
+                    yield cacheService_1.default.setHash(`user:${email}`, response);
+                    return { user: response };
+                }
+                else {
+                    throw Error("User not found!");
+                }
+            }
             else {
-                throw Error("User not found!");
+                return { user: cached };
             }
         }
         catch (e) {
@@ -98,6 +117,7 @@ function deleteUserByEmail(email) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const response = yield user_1.default.deleteUserByEmail(email);
+            yield cacheService_1.default.del([`user:${email}`, `user:${response.id}`, "AllUsers"]);
             return { response };
         }
         catch (e) {
@@ -114,8 +134,10 @@ function updateAgeByEmail(email, age) {
                 throw Error("Email not signed up");
             }
             const response = yield user_1.default.updateAgeByEmail(email, age);
-            if (response)
+            if (response) {
+                yield cacheService_1.default.del([`user:${email}`, "AllUsers"]);
                 return { user: response };
+            }
             else
                 throw Error("Erro while updating Age");
         }
@@ -152,11 +174,19 @@ function isValidEmail(email) {
 function getUserById(id) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const response = yield user_1.default.getUserById(id);
-            if (response)
-                return { user: response };
+            const cached = yield cacheService_1.default.getHash(`user:${id}`);
+            if (!cached) {
+                const response = yield user_1.default.getUserById(id);
+                if (response) {
+                    yield cacheService_1.default.setHash(`user:${id}`, response);
+                    return { user: response };
+                }
+                else {
+                    throw Error("User not found");
+                }
+            }
             else {
-                throw Error("User not found");
+                return { user: cached };
             }
         }
         catch (e) {
@@ -167,9 +197,22 @@ function getUserById(id) {
 function deleteAllUsers() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            const { users } = yield getUsers();
+            if (users) {
+                // Extract user IDs and emails
+                const userIds = users.map((user) => user.id);
+                const userEmails = users.map(user => user.email);
+                // Create cache keys for IDs and emails
+                const keysToDelete = userIds.map(id => `user:${id}`);
+                const emailsToDelete = userEmails.map(email => `user:${email}`);
+                // Delete cache entries for both IDs and emails
+                yield cacheService_1.default.del([...keysToDelete, ...emailsToDelete]);
+            }
             const response = yield user_1.default.deleteAllUsers();
-            if (response)
+            if (response.count > 0) {
+                yield cacheService_1.default.del(["AllUsers"]);
                 return response;
+            }
             else {
                 throw Error("Error deleting users!");
             }

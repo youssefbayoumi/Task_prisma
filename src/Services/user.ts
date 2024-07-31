@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import {User} from "../Interface/user"
 import config from '../Config/index.config';
+import cacheService from "../Cache/cacheService"
 
 
 
@@ -41,12 +42,23 @@ async function signUp(newUser:User) {
 async function getUsers() {
     
     try{
+        const cached=await cacheService.sGet("AllUsers")
+        if(!cached){
+            console.log("here")
         const users = await userRepo.getUsers();
-        if(users)
+        if(users){
+        const userStrings: string[] = users.map(user => JSON.stringify(user));
+         await cacheService.sAdd("AllUsers",userStrings)
         return {users}
+    }
     else{
         throw Error("No users found!")
     }
+}else
+{
+    const usersParsed=cached.map((user: string)=> JSON.parse(user))
+    return {users:usersParsed}
+}
       
     
     }catch(e:any)
@@ -61,13 +73,20 @@ async function getUserByEmail(email:string) {
     }
     
     try{
-        const response=await userRepo.getUserByEmail(email)
-        console.log(response)
-        if(response)
-        return {user:response}
-    else{
-        throw Error("User not found!")
-    }
+        const cached=await cacheService.getHash(`user:${email}`)
+        if(!cached){
+            const response=await userRepo.getUserByEmail(email)
+            if(response){
+            await cacheService.setHash(`user:${email}`,response)
+            return {user:response}
+        }
+        else{
+            throw Error("User not found!")
+        }
+        }else{
+            return {user:cached}
+        }
+       
     
     }catch(e:any)
     {
@@ -91,6 +110,7 @@ async function deleteUserByEmail(email:string) {
     
     try{
         const response=await userRepo.deleteUserByEmail(email)
+         await cacheService.del([`user:${email}`,`user:${response.id}`,"AllUsers"])
         return {response}
         
     
@@ -108,8 +128,12 @@ async function updateAgeByEmail(email:string,age:number) {
             throw Error("Email not signed up")
             }
         const response=await userRepo.updateAgeByEmail(email,age)
-        if(response)
+        if(response){
+        await cacheService.del([`user:${email}`,"AllUsers"])
+  
         return {user:response}
+
+    }
     else throw Error("Erro while updating Age")
     }catch(e:any)
     {
@@ -148,11 +172,22 @@ function isValidEmail(email: string): boolean {
 async function getUserById(id:string)
 {
     try{
-        const response=await userRepo.getUserById(id)
-        if(response)
-        return {user:response}
-    else{
-        throw Error("User not found")
+        
+        const cached=await cacheService.getHash(`user:${id}`)
+        if(!cached)
+            {
+                const response=await userRepo.getUserById(id)
+                if(response){
+                await cacheService.setHash(`user:${id}`,response)
+                    return {user:response}
+                }
+                else{
+                    throw Error("User not found")
+            }
+         
+    }else
+    {
+        return {user:cached}
     }
     }catch(e:any)
     {
@@ -162,9 +197,26 @@ async function getUserById(id:string)
 async function deleteAllUsers()
 {
     try{
+        const {users}=await getUsers()
+        if (users) {
+            // Extract user IDs and emails
+        
+            const userIds = users.map((user) => user.id);
+            const userEmails = users.map(user => user.email);
+        
+            // Create cache keys for IDs and emails
+            const keysToDelete = userIds.map(id => `user:${id}`);
+            const emailsToDelete = userEmails.map(email => `user:${email}`);
+        
+            // Delete cache entries for both IDs and emails
+            await cacheService.del([...keysToDelete, ...emailsToDelete]);
+        }
+
         const response=await userRepo.deleteAllUsers()
-        if(response)
+        if(response.count>0){
+        await cacheService.del(["AllUsers"])
         return response
+    }
     else{
         throw Error("Error deleting users!")
     }
