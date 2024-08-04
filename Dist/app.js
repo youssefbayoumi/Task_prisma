@@ -15,19 +15,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const fastify_1 = __importDefault(require("fastify"));
 const routes_1 = __importDefault(require("./Routes/routes"));
 const index_config_1 = __importDefault(require("./Config/index.config"));
-const child_process_1 = require("child_process");
 const app = (0, fastify_1.default)();
 app.register(routes_1.default, { prefix: "api/users" });
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             yield app.listen({ port: index_config_1.default.PORT, host: '0.0.0.0' });
-            const child = (0, child_process_1.fork)("/Users/youssefalaa/Downloads/Scripts/temp.js");
-            child.on('message', (message) => {
-                console.log(`Received message from child: ${message}`);
-            });
-            child.on('exit', () => console.log("Child process Exited!"));
-            // crons()
+            //    // const child=fork("/Users/youssefalaa/Downloads/Scripts/temp.js")
+            //     child.on('message', (message) => {
+            //     console.log(`Received message from child: ${message}`);
+            //       });
+            //     child.on('exit',()=>console.log("Child process Exited!"))
+            //     // crons()
             console.log(`Server is running on port ${index_config_1.default.PORT}`);
         }
         catch (e) {

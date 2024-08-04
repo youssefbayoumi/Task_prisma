@@ -14,8 +14,8 @@ const save = async (userData: User) => {
 const getUserByEmail = async (email: string) => {
     try {
         return await prisma.user.findUnique({ where: { email: email } });
-    } catch (error) {
-        throw new Error("Error fetching user by email");
+    } catch (error:any) {
+        throw new Error(error.message);
     }
 }
 

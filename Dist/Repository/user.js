@@ -26,7 +26,7 @@ const getUserByEmail = (email) => __awaiter(void 0, void 0, void 0, function* ()
         return yield prisma_1.default.user.findUnique({ where: { email: email } });
     }
     catch (error) {
-        throw new Error("Error fetching user by email");
+        throw new Error(error.message);
     }
 });
 const getUsers = () => __awaiter(void 0, void 0, void 0, function* () {

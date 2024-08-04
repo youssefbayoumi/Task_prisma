@@ -1,230 +1,197 @@
 import userRepo from "../Repository/user";
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import {User} from "../Interface/user"
-import config from '../Config/index.config';
-import cacheService from "../Cache/cacheService"
-
-
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { User } from "../Interface/user";
+import config from "../Config/index.config";
+import cacheService from "../Cache/cacheService";
 
 const creatToken = (_id: string) => {
-    return jwt.sign({ _id: _id },config.SECRET , { expiresIn: '1d' });
-}
-
-async function signUp(newUser:User) {
-    if(!isValidEmail(newUser.email))
-        {
-            throw Error("Email not valid")
-        }
-    if(newUser.age<=0)
-        {
-            throw Error("Age not valid")
-        }
-    if(newUser.password.length<8)
-        throw Error("Password not strong enough!")
-
-    if(await userRepo.getUserByEmail(newUser.email)){
-        throw Error("Email already signed up")
-    }
-   
-    try{
-        const salt=await bcrypt.genSalt(10);
-        const hash=await bcrypt.hash(newUser.password,salt)
-        const response = await userRepo.save({...newUser,password:hash})
-        const token = creatToken(response.id)
-    return {message:"User created successfully",token:token,user:response}
-    }catch(e:any)
-    {
-        console.error(e);
-        throw Error(e.message)
-    }
-}
-async function getUsers() {
-    
-    try{
-        const cached=await cacheService.sGet("AllUsers")
-        if(!cached){
-            console.log("here")
-        const users = await userRepo.getUsers();
-        if(users){
-        const userStrings: string[] = users.map(user => JSON.stringify(user));
-         await cacheService.sAdd("AllUsers",userStrings)
-        return {users}
-    }
-    else{
-        throw Error("No users found!")
-    }
-}else
-{
-    const usersParsed=cached.map((user: string)=> JSON.parse(user))
-    return {users:usersParsed}
-}
-      
-    
-    }catch(e:any)
-    {
-        throw Error(e.message)
-    }
-}
-async function getUserByEmail(email:string) {
-    if(!isValidEmail(email))
-    {
-        throw Error("Email not valid!")
-    }
-    
-    try{
-        const cached=await cacheService.getHash(`user:${email}`)
-        if(!cached){
-            const response=await userRepo.getUserByEmail(email)
-            if(response){
-            await cacheService.setHash(`user:${email}`,response)
-            return {user:response}
-        }
-        else{
-            throw Error("User not found!")
-        }
-        }else{
-            return {user:cached}
-        }
-       
-    
-    }catch(e:any)
-    {
-        throw  Error(e.message )
-    }
-}
-async function getUserByPhone(phone:string) {    
-        try{
-            const response=await userRepo.getUserByPhone(phone)
-            if(response)
-            return {user:response}
-        else{
-            throw Error("User not found!")
-        }
-        }catch(e:any)
-        {
-            throw Error(e.message)
-        }
-}
-async function deleteUserByEmail(email:string) {
-    
-    try{
-        const response=await userRepo.deleteUserByEmail(email)
-         await cacheService.del([`user:${email}`,`user:${response.id}`,"AllUsers"])
-        return {response}
-        
-    
-    }catch(e:any)
-    {
-       
-        throw new Error(e.message)
-    }
-}
-async function updateAgeByEmail(email:string,age:number) {
-    try{
-        const isEmailThere=await userRepo.getUserByEmail(email)
-        if(!isEmailThere){
-            // return { Error:"Email not signedUp!"}
-            throw Error("Email not signed up")
-            }
-        const response=await userRepo.updateAgeByEmail(email,age)
-        if(response){
-        await cacheService.del([`user:${email}`,"AllUsers"])
-  
-        return {user:response}
-
-    }
-    else throw Error("Erro while updating Age")
-    }catch(e:any)
-    {
-        return {error:e.message}
-    }
-    
-}
-async function signIn(email:string,password:string)
-{
-    try{
-        if(!email||!password)
-            throw Error("All fields must be filled!")
-        if(!isValidEmail(email))
-            throw Error("Invalid Email")
-        const user=await userRepo.getUserByEmail(email)
-        if(!user)
-            throw Error ("Email not signed up")
-        const match=await bcrypt.compare(password,user.password)
-        if(!match)
-            throw Error("Incorrect passsword")
-        const token=creatToken(user.id)
-        return {token:token}
-
-
-
-    }catch(e:any)
-    {
-        return {Error:e.message}
-    }
-}
+  return jwt.sign({ _id: _id }, config.SECRET, { expiresIn: "1d" });
+};
 
 function isValidEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 }
-async function getUserById(id:string)
-{
-    try{
-        
-        const cached=await cacheService.getHash(`user:${id}`)
-        if(!cached)
-            {
-                const response=await userRepo.getUserById(id)
-                if(response){
-                await cacheService.setHash(`user:${id}`,response)
-                    return {user:response}
-                }
-                else{
-                    throw Error("User not found")
-            }
-         
-    }else
-    {
-        return {user:cached}
-    }
-    }catch(e:any)
-    {
-        throw Error(e.message)
-    }
+async function signUp(newUser: User) {
+  if (!isValidEmail(newUser.email)) throw Error("Email not valid");
+
+  if (newUser.age <= 0) throw Error("Age not valid");
+
+  if (newUser.password.length < 8) throw Error("Password not strong enough!");
+
+  if (await userRepo.getUserByEmail(newUser.email)) {
+    throw Error("Email already signed up");
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(newUser.password, salt);
+    const response = await userRepo.save({ ...newUser, password: hash });
+    const token = creatToken(response.id);
+    await cacheService.setHash(response.id, response);
+    return {
+      message: "User created successfully",
+      token: token,
+      user: response,
+    };
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error signing up: ${error.message}`);
+    //for non error objects
+    throw new Error(`unexpected Error Signing up u ${String(error)}`);
+  }
 }
-async function deleteAllUsers()
-{
-    try{
-        const {users}=await getUsers()
-        if (users) {
-            // Extract user IDs and emails
-        
-            const userIds = users.map((user) => user.id);
-            const userEmails = users.map(user => user.email);
-        
-            // Create cache keys for IDs and emails
-            const keysToDelete = userIds.map(id => `user:${id}`);
-            const emailsToDelete = userEmails.map(email => `user:${email}`);
-        
-            // Delete cache entries for both IDs and emails
-            await cacheService.del([...keysToDelete, ...emailsToDelete]);
-        }
+async function getUsers() {
+  try {
+    const cached = await cacheService.getAllUsers();
+    if (cached) return { users: cached };
 
-        const response=await userRepo.deleteAllUsers()
-        if(response.count>0){
-        await cacheService.del(["AllUsers"])
-        return response
+    const users = await userRepo.getUsers();
+    if (!users) throw new Error("No users found!");
+    await cacheService.setAllUsers(users);
+    return { users };
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error fetching Users: ${error.message}`);
+    //for non error objects
+    throw new Error(`unexpected Error fetching users ${String(error)}`);
+  }
+}
+async function getUserByEmail(email: string) {
+  if (!isValidEmail(email)) throw Error("Email not valid!");
+  try {
+    const response = await userRepo.getUserByEmail(email);
+    if (!response) throw Error("User not found!");
+    return { user: response };
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error fetching User: ${error.message}`);
+    //for non error objects
+    throw new Error(`unexpected Error fetching users ${String(error)}`);
+  }
+}
+async function getUserByPhone(phone: string) {
+  try {
+    const response = await userRepo.getUserByPhone(phone);
+    if (response) return { user: response };
+    else {
+      throw Error("User not found!");
     }
-    else{
-        throw Error("Error deleting users!")
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error fetching User by email: ${error.message}`);
+    //for non error objects
+    throw new Error(`unexpected Error fetching user by email${String(error)}`);
+  }
+}
+async function deleteUserByEmail(email: string) {
+  try {
+    const response = await userRepo.deleteUserByEmail(email);
+    await cacheService.del([
+      `user:${email}`,
+      `user:${response.id}`,
+      "AllUsers",
+    ]);
+    return { response };
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error deleting User: ${error.message}`);
+    //for non error objects
+    throw new Error(`unexpected Error deleting user ${String(error)}`);
+  }
+}
+async function updateAgeByEmail(email: string, age: number) {
+  try {
+    const isEmailThere = await userRepo.getUserByEmail(email);
+    if (!isEmailThere) {
+      throw new Error("Email not signed up");
     }
-    }catch(e:any)
-    {
-        throw Error(e.message)
-    }
+    const response = await userRepo.updateAgeByEmail(email, age);
+    if (response) {
+      await cacheService.del([`user:${email}`, "AllUsers"]);
 
+      return { user: response };
+    } else throw Error("Erro while updating Age");
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error updating User: ${error.message}`);
+    throw new Error(`unexpected Error updating user ${String(error)}`);
+  }
 }
 
-export default { signUp,getUsers ,getUserByEmail,getUserByPhone,deleteUserByEmail,updateAgeByEmail,signIn,getUserById,deleteAllUsers};
+async function signIn(email: string, password: string) {
+  try {
+    if (!email || !password) throw Error("All fields must be filled!");
+    if (!isValidEmail(email)) throw Error("Invalid Email");
+    const user = await userRepo.getUserByEmail(email);
+    if (!user) throw Error("Email not signed up");
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) throw Error("Incorrect passsword");
+    const token = creatToken(user.id);
+    return { token: token };
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error signing in User: ${error.message}`);
+    throw new Error(`unexpected Error signing in users ${String(error)}`);
+  }
+}
+
+async function getUserById(id: string) {
+  try {
+    const cached = await cacheService.getHash(id);
+    if (cached) return { user: cached };
+
+    const response = await userRepo.getUserById(id);
+    if (!response) throw Error("User not found");
+
+    await cacheService.setHash(id, response);
+    return { user: response };
+  } catch (error: unknown) {
+    if (error instanceof Error) throw Error(error.message);
+    throw new Error(`Unexpected Error getting user ${String(error)}`);
+  }
+}
+async function deleteAllUsers() {
+  try {
+    const { users } = await getUsers();
+    if (users) {
+      // Extract user IDs and emails
+
+      const userIds = users.map((user) => user.id);
+      const userEmails = users.map((user) => user.email);
+
+      // Create cache keys for IDs and emails
+      const keysToDelete = userIds.map((id) => `user:${id}`);
+      const emailsToDelete = userEmails.map((email) => `user:${email}`);
+
+      // Delete cache entries for both IDs and emails
+      await cacheService.del([...keysToDelete, ...emailsToDelete]);
+    }
+
+    const response = await userRepo.deleteAllUsers();
+    if (response.count > 0) {
+      await cacheService.del(["AllUsers"]);
+      return response;
+    } else {
+      throw new Error("Error deleting users!");
+    }
+  } catch (error: unknown) {
+    if (error instanceof Error)
+      throw new Error(`Error deleting Users: ${error.message}`);
+    //for non error objects
+    throw new Error(`unexpected Error deleting users ${String(error)}`);
+  }
+}
+
+export default {
+  signUp,
+  getUsers,
+  getUserByEmail,
+  getUserByPhone,
+  deleteUserByEmail,
+  updateAgeByEmail,
+  signIn,
+  getUserById,
+  deleteAllUsers,
+};

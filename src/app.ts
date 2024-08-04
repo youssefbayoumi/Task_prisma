@@ -15,13 +15,13 @@ async function main()
 {
     try{
         await app.listen({ port: config.PORT, host: '0.0.0.0' });
-        const child=fork("/Users/youssefalaa/Downloads/Scripts/temp.js")
-        child.on('message', (message) => {
+    //    // const child=fork("/Users/youssefalaa/Downloads/Scripts/temp.js")
+    //     child.on('message', (message) => {
             
-        console.log(`Received message from child: ${message}`);
-          });
-        child.on('exit',()=>console.log("Child process Exited!"))
-        // crons()
+    //     console.log(`Received message from child: ${message}`);
+    //       });
+    //     child.on('exit',()=>console.log("Child process Exited!"))
+    //     // crons()
          console.log(`Server is running on port ${config.PORT}`);
     }catch(e)
     { 

@@ -20,16 +20,14 @@ const cacheService_1 = __importDefault(require("../Cache/cacheService"));
 const creatToken = (_id) => {
     return jsonwebtoken_1.default.sign({ _id: _id }, index_config_1.default.SECRET, { expiresIn: "1d" });
 };
-function isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
 function signUp(newUser) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (!isValidEmail(newUser.email))
+        if (!isValidEmail(newUser.email)) {
             throw Error("Email not valid");
-        if (newUser.age <= 0)
+        }
+        if (newUser.age <= 0) {
             throw Error("Age not valid");
+        }
         if (newUser.password.length < 8)
             throw Error("Password not strong enough!");
         if (yield user_1.default.getUserByEmail(newUser.email)) {
@@ -40,49 +38,59 @@ function signUp(newUser) {
             const hash = yield bcrypt_1.default.hash(newUser.password, salt);
             const response = yield user_1.default.save(Object.assign(Object.assign({}, newUser), { password: hash }));
             const token = creatToken(response.id);
-            yield cacheService_1.default.setHash(response.id, response);
             return {
                 message: "User created successfully",
                 token: token,
                 user: response,
             };
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error signing up: ${error.message}`);
-            //for non error objects
-            throw new Error(`unexpected Error Signing up u ${String(error)}`);
+        catch (e) {
+            console.error(e);
+            throw Error(e.message);
         }
     });
 }
 function getUsers() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const cached = yield cacheService_1.default.getAllUsers();
-            if (cached)
-                return { users: cached };
-            const users = yield user_1.default.getUsers();
-            if (!users)
-                throw new Error("No users found!");
-            yield cacheService_1.default.setAllUsers(users);
-            return { users };
+            const cached = yield cacheService_1.default.sGet("AllUsers");
+            if (!cached) {
+                console.log("here");
+                const users = yield user_1.default.getUsers();
+                if (users) {
+                    const userStrings = users.map((user) => JSON.stringify(user));
+                    yield cacheService_1.default.sAdd("AllUsers", userStrings);
+                    return { users };
+                }
+                else {
+                    throw Error("No users found!");
+                }
+            }
+            else {
+                const usersParsed = cached.map((user) => JSON.parse(user));
+                return { users: usersParsed };
+            }
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error fetching Users: ${error.message}`);
-            //for non error objects
-            throw new Error(`unexpected Error fetching users ${String(error)}`);
+        catch (e) {
+            throw Error(e.message);
         }
     });
 }
 function getUserByEmail(email) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (!isValidEmail(email))
+        if (!isValidEmail(email)) {
             throw Error("Email not valid!");
+        }
         try {
+            const start = Date.now();
+            const cached = yield cacheService_1.default.getHash(`user:${email}`);
+            console.log(`Cache lookup took ${Date.now() - start}ms`);
+            if (cached)
+                return { user: cached };
             const response = yield user_1.default.getUserByEmail(email);
             if (!response)
                 throw Error("User not found!");
+            yield cacheService_1.default.setHash(`user:${email}`, response);
             return { user: response };
         }
         catch (error) {
@@ -103,11 +111,8 @@ function getUserByPhone(phone) {
                 throw Error("User not found!");
             }
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error fetching User by email: ${error.message}`);
-            //for non error objects
-            throw new Error(`unexpected Error fetching user by email${String(error)}`);
+        catch (e) {
+            throw Error(e.message);
         }
     });
 }
@@ -122,11 +127,8 @@ function deleteUserByEmail(email) {
             ]);
             return { response };
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error deleting User: ${error.message}`);
-            //for non error objects
-            throw new Error(`unexpected Error deleting user ${String(error)}`);
+        catch (e) {
+            throw new Error(e.message);
         }
     });
 }
@@ -135,7 +137,8 @@ function updateAgeByEmail(email, age) {
         try {
             const isEmailThere = yield user_1.default.getUserByEmail(email);
             if (!isEmailThere) {
-                throw new Error("Email not signed up");
+                // return { Error:"Email not signedUp!"}
+                throw Error("Email not signed up");
             }
             const response = yield user_1.default.updateAgeByEmail(email, age);
             if (response) {
@@ -145,10 +148,8 @@ function updateAgeByEmail(email, age) {
             else
                 throw Error("Erro while updating Age");
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error updating User: ${error.message}`);
-            throw new Error(`unexpected Error updating user ${String(error)}`);
+        catch (e) {
+            return { error: e.message };
         }
     });
 }
@@ -168,23 +169,25 @@ function signIn(email, password) {
             const token = creatToken(user.id);
             return { token: token };
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error signing in User: ${error.message}`);
-            throw new Error(`unexpected Error signing in users ${String(error)}`);
+        catch (e) {
+            return { Error: e.message };
         }
     });
+}
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
 }
 function getUserById(id) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const cached = yield cacheService_1.default.getHash(id);
+            const cached = yield cacheService_1.default.getHash(`user:${id}`);
             if (cached)
                 return { user: cached };
             const response = yield user_1.default.getUserById(id);
             if (!response)
                 throw Error("User not found");
-            yield cacheService_1.default.setHash(id, response);
+            yield cacheService_1.default.setHash(`user:${id}`, response);
             return { user: response };
         }
         catch (error) {
@@ -217,11 +220,8 @@ function deleteAllUsers() {
                 throw new Error("Error deleting users!");
             }
         }
-        catch (error) {
-            if (error instanceof Error)
-                throw new Error(`Error deleting Users: ${error.message}`);
-            //for non error objects
-            throw new Error(`unexpected Error deleting users ${String(error)}`);
+        catch (e) {
+            throw new Error(e.message);
         }
     });
 }

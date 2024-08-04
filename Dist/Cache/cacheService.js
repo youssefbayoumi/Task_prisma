@@ -30,12 +30,17 @@ function get(key) {
         }
     });
 }
-function setHash(key, value) {
+function setHash(id, value) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             //array with values
-            const entries = Object.entries(value).flat();
-            const res = yield cacheClient_1.default.hset(key, ...entries);
+            const multi = cacheClient_1.default.multi();
+            const key = `user:${id}`;
+            const res = multi.hset(key, value);
+            //only add the list if it is already present
+            if ((yield cacheClient_1.default.exists("AllUsers")) === 1)
+                multi.sadd("AllUsers", id);
+            yield multi.exec();
             yield cacheClient_1.default.expire(key, 3600);
             return res;
         }
@@ -44,13 +49,16 @@ function setHash(key, value) {
         }
     });
 }
-function getHash(key) {
+function getHash(id) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            const key = `user:${id}`;
             const res = yield cacheClient_1.default.hgetall(key);
             if (Object.keys(res).length === 0)
                 return null;
             yield cacheClient_1.default.expire(key, 3600);
+            if ((yield cacheClient_1.default.exists("AllUsers")) === 1)
+                cacheClient_1.default.sadd("AllUsers", id);
             return res;
             //  return Object.keys(res).length === 0 ? null : res;
         }
@@ -70,30 +78,32 @@ function del(key) {
         }
     });
 }
-function sAdd(key, value) {
+function setAllUsers(users) {
     return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const res = yield cacheClient_1.default.sadd(key, ...value);
-            yield cacheClient_1.default.expire(key, 3600);
-            return res;
+        const multi = cacheClient_1.default.multi();
+        for (const user of users) {
+            const userKey = `user:${user.id}`;
+            multi.hset(userKey, user);
+            multi.sadd("AllUsers", user.id);
         }
-        catch (e) {
-            throw Error(e.message);
-        }
+        yield multi.exec();
     });
 }
-function sGet(key) {
+function getAllUsers() {
     return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const res = yield cacheClient_1.default.smembers(key);
-            if (res.length <= 0)
-                return null;
-            yield cacheClient_1.default.expire(key, 3600);
-            return res;
+        //   const userIDs = await redis.smembers("AllUsers");
+        const userIDs = ["james", "john", "jane", "jake", "josh"];
+        const pipeline = cacheClient_1.default.pipeline();
+        for (const id of userIDs) {
+            pipeline.hgetall(`user:${id}`);
         }
-        catch (e) {
-            throw Error(e.message);
+        const results = yield pipeline.exec();
+        if (results &&
+            results.length > 0 &&
+            !results.some(([result]) => result === null)) {
+            return results.map((result) => result[1]);
         }
+        return null;
     });
 }
-exports.default = { get, getHash, setHash, sAdd, sGet, del };
+exports.default = { get, getHash, setHash, del, setAllUsers, getAllUsers };
